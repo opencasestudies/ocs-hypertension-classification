@@ -23,15 +23,7 @@ The data is downloaded from NYC NHANES (a local version of NHANES), The NYC Heal
 ## Analysis
 
 
-
-Reducing the quality of diet from excellent to good increase the odds of having hypertension by 1.06 ($P < 0.001$), reducing the quality of diet from excellent to fair increase the odds of having hypertension by 1.13 ($P < 0.001$), reducing the quality of diet from excellent to fair reduce the odds of having hypertension by 0.98 ($P < 0.001$) and reducing the quality of diet from average of very good and good to poor increase the odds of having hypertension by 0.97  ($P < 0.001$).
-
-The reduction of diet quality to levels below the current diet quality increase the odds of having hypertension. The excpetion was made by changing from excellent to poor. However, using the average of the very good and good to poor to replace that result, the reduction of the diet quality, on the average, leads to increase in the odds of hypertension substantially.  
-
-
-
-
-
+The error does not decrease too much as the number of the tree get to 200. The importance of plot define the importance of each variable by the reduction of the variance. The age reduce most of the variance following with bmi, income, diet, race. diabetes, drinking status, smoking status, gender and born place.
 
 
 
