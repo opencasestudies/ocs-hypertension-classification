@@ -208,60 +208,18 @@ for (i in names(hypertension_DF[,-ncol(hypertension_DF)])) {
 ```
 
 
+
 Since the age and BMI are not normally distributed, we should use the non-parametric(Wilcoxon) method to test the differences.
 
+## Cross-Validation
 
+### K fold Cross-validation
 
-## Caret Package
-
-After preprocessed the data, we want to build a best prediction model. We will fit logistic regression, random forest and elastic net models first, and then compare the cross-validation error to select the best prediction model.
-
-We will introduce the `caret` package first. This package gives us a simple way to compare cross-validation errors
-
-
-### Set up a train control for cross-validation using ` trainControl()` function from ` caret` pacakge.
-
-+ since we are using cross-validation, we will input the argument ` method = 'cv'` with number of the fold equal to 10
-
-This is a setting in the later function ` train()` where we can train our models and output cross-validation error
-
-```{r}
-train_control<- trainControl(method="cv", number=3)
-```
-
-
-using the ` tran()` function with ` method = 'glm'`, we get the logistic regression with cross-validation. The output RMSE is the rooted mean squre error, we can power it by 2 to get the mean square error.
-
-```{r}
-hypertension_DF$hypertension <- ifelse(hypertension_DF$hypertension == 'No', yes = 0, no = 1)
-hypertension_DF <- na.omit(hypertension_DF)
-fit_glm <- train(hypertension~., data=hypertension_DF, trControl=train_control, method="glm")
-
-fit_glm$results$RMSE^2
-
-```
-
-similarly, using ` method = 'rf'` and ` tuneLength = `5` to perform random forest with ramdom 15 tunning parameters mtry
-
-```{r}
-fit_rf <- train(hypertension~., data=hypertension_DF, trControl=train_control, method="rf", tuneLength = 15)
-data.frame(
-mtry = fit_rf$results$mtry,
-mse = fit_rf$results$RMSE^2
-) %>%
-  arrange(mse) -> rf.mse
-rf.mse
-
-plot(fit_rf)
-```
-
-### Cross-validation
-
-We can also perform cross-validation by hard coding. It is pretty simple after understanding the idea of cross-validation.
+We can perform cross-validation by hard coding. It is pretty simple after understanding the idea of cross-validation.
 
 1. we split the data into k partitions, and we call it k-folds
 
-2. we select one fold as validation dataset, the other k-1 folds as training dataset
+2. we select one fold as validation dataset, the other k-1 folds as the training dataset
 
 3. fit the model using training dataset
 
@@ -270,19 +228,43 @@ We can also perform cross-validation by hard coding. It is pretty simple after u
 5. repeat with each fold, we can have k validation errors
 
 
-We use elastic net as our exmaple to do the cross-validation hard coding
 
-```{r}
+![Cross-Validation](https://www.researchgate.net/profile/Juan_Buhagiar2/publication/322509110/figure/fig1/AS:583173118664704@1516050714606/An-example-of-a-10-fold-cross-validation-cro17.png)
+
+
+![Cross-Validation](https://i0.wp.com/www.milanor.net/blog/wp-content/uploads/2016/05/articolo_milanor_3.png)
+
+
+
+We will use the elastic net as our example to do the cross-validation hard coding
+
+as stated before, we can do 
+
++ split the data to n fold
+
++ choose the first fold as validation data set
+
++ use the rest of  n-1 data sets as training data
+
++ fit the elastic net model in the training dataset
+
++ calculate the validation error on the validation data set
+
++ repeat above steps n times
+
+
+
+```{r, results='asis'}
 set.seed(1234)
 cv.shrinkage <- function(data = dat.reg, n = "fold", y = "Class", a = 1){
-  dd <- data[sample(nrow(data), nrow(data), replace = F),]
-  dat.splited <- split(dd, rep(1:n, each=nrow(dd)/(n)))
-  best.l <- NULL
-  fold.error <- NULL
+  dd <- data[sample(nrow(data), nrow(data), replace = F),] ## randomnized sorting the data
+  dat.splited <- split(dd, rep(1:n, each=nrow(dd)/(n))) ## split the data into n folds
+  best.l <- NULL ## NULL vector for best lambda
+  fold.error <- NULL ## NULL vector for errors
       for (i in 1:n) {
-      train <- dat.splited[-i]
-      train <- do.call(rbind, train)
-      valid <- dat.splited[[i]]
+      train <- dat.splited[-i] ## extract the training from the list
+      train <- do.call(rbind, train) ## unlist the training data 
+      valid <- dat.splited[[i]] ## extract the validation error
       cv.lasso <- cv.glmnet(x = model.matrix(hypertension ~., train), y = as.matrix(train[,y]), nfolds = n, alpha=a, type.measure="deviance", family = "binomial", standardize = T)
       l <- cv.lasso$lambda[which.min(cv.lasso$cvm)]
       fit.lasso <- glmnet(x = model.matrix(hypertension ~., train), y = as.matrix(train[,y]) , family = "binomial", alpha = a, lambda = l)
@@ -302,6 +284,11 @@ cv.shrinkage <- function(data = dat.reg, n = "fold", y = "Class", a = 1){
 
 dadada <- list()
 
+
+hypertension_DF$hypertension <- ifelse(hypertension_DF$hypertension == 'No', yes = 0, no = 1)
+hypertension_DF <- na.omit(hypertension_DF)
+
+
 for (i in 1:length(seq(0,1, by = 0.1))) {
   dadada[[i]] <-tryCatch({
     cv.shrinkage(data = hypertension_DF[,-1], n = 10, y = "hypertension", a = seq(0,1, by = 0.1)[i])
@@ -319,7 +306,6 @@ tbl.shrinkage %>%
 tbl.shrinkage[which.min(tbl.shrinkage$error),] %>%
   xtable::xtable(digits = 4)
 
-#tbl.shrinkage$error <- sqrt(tbl.shrinkage$error)
 
 ggplot(tbl.shrinkage) +
   geom_line(aes(x = alpha, y = sqrt(error)), color = 'blue') +
@@ -331,10 +317,66 @@ ggplot(tbl.shrinkage) +
 ```
 
 
-The x is the alpha, y is the RMSE, and the point with value is the optimal lambda that return at the alpha.
+
+The x is the alpha, y is the RMSE, and the point with value is the optimal lambda that returns at the alpha.
+
+The alpha equaling to 0.1 and lambda equaling to 0.0318 gives us the least cross-validation error. Thus, the two parameters from elastic net model is $\alpha = 0.1$ and $\lambda = 0.0318$
+
+
+
+### ` Caret` Package
+
+Luckily, there is a package named ` caret` which can help us to do the cross-validation in one line code.
+
+After preprocessing the data, we want to build the best prediction model. We will fit random forest using ` caret` package and get our cross-validation error from the ` train` function in ` caret` package
+
+
+### Set up a train control for cross-validation using ` trainControl()` function from ` caret` pacakge.
+
++ since we are using cross-validation, we will input the argument ` method = 'cv'` with the number of the fold equal to 10
+
+This is a setting in the later function ` train()` where we can train our models and output cross-validation error
+
 
 
 ```{r}
+train_control<- trainControl(method="cv", number=3)
+```
+
+
+using the ` tran()` function with ` method = 'glm'`, we get the logistic regression with cross-validation. The output RMSE is the rooted mean square error. We can power it by 2 to get the mean square error.
+
+
+```{r}
+fit_glm <- train(hypertension~., data=hypertension_DF, trControl=train_control, method="glm")
+
+fit_glm$results$RMSE^2
+
+```
+
+similarly, using ` method = 'rf'` and ` tuneLength = `5` to perform random forest with ramdom 15 tunning parameters mtry
+
+```{r}
+fit_rf <- train(hypertension~., data=hypertension_DF, trControl=train_control, method="rf", tuneLength = 15)
+data.frame(
+mtry = fit_rf$results$mtry,
+mse = fit_rf$results$RMSE^2
+) %>%
+  arrange(mse) -> rf.mse
+rf.mse
+
+par(mfrow = c(1,2))
+plot(fit_rf$results$mtry, fit_rf$results$RMSE, type = 'l', main = 'mtry vs. MSE', xlab = 'mtry', ylab = 'MSE')
+plot(fit_rf$finalModel, main = 'tree vs. MSE')
+```
+
+
+Also, you can see the importance plot from the random forest. The importance is evaluated by the variance explained by that variable.
+
+In our case, the parameter mtry with 144 provides the least cross-validation error. With increase in the number of trees, the cross-validation constant after it reaches 300, we will fit the best random forest model later with interpretations.
+
+
+```{r, results='asis'}
 tbl.shrinkage[which.min(tbl.shrinkage$error),]
 
 rf.mse[1,]
@@ -342,30 +384,46 @@ rf.mse[1,]
 fit_glm$results$RMSE^2
 ```
 
+
+
+
+
+
+
 Comparing with the cross-validation error, we get the best prediction model is the random forest model with mtry = 144.
 
-## Final Prediction model 
 
-Now, we can take a look on the random forest model that we fit
+
+## Final Prediction Model 
+
+Now, we can take a look at the random forest model that we fit
+
+Since the best ` mytry` (number of the parameters included in each tree) in our case is 144, we will fit the model with ` mytry = 144`.
+
 
 
 ```{r}
-fit_rf <- randomForest(hypertension~., data = hypertension_DF[,-c(1,13)], mytry = 144, tree = 1000)
-fit_rf
+fit_rf1 <- randomForest(hypertension~., data = hypertension_DF[,-c(1,13)], mytry = 144, tree = 1000)
+fit_rf1
 ```
 
 
 ```{r}
+importance(fit_rf1)
+```
 
-importance(fit_rf)
 
+
+```{r}
 par(mfrow = c(1,2))
-plot(fit_rf)
-varImpPlot(fit_rf)
+plot(fit_rf1, main = 'Error vs. Number of Trees')
+varImpPlot(fit_rf1, main = 'Variable Importance')
 ```
 
-The error does not decrease too much as the number of the tree get to 200. The importance of plot define the importance of each variable by the reduction of the variance. The age reduce most of the variance following with bmi, income, diet, race. diabetes, drinking status, smoking status, gender and born place.
 
+
+
+The error does not decrease too much as the number of the tree get to 200. The importance of plot defines the importance of each variable by the reduction of the variance. The age reduces most of the variation following with BMI, income, diet, race, diabetes, drinking status, smoking status, gender, and born place.
 
 
 
